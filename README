@@ -1,0 +1,4 @@
+Utilities for T-Com in Croatia
+
+tcom-ip.pl:  		will dump current IP of DSL username and password provided
+tcom-ip-history.pl: 	will dump IP history of DSL username and password provided
