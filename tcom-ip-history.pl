@@ -31,8 +31,9 @@ Getopt::Long::Configure ("bundling");
 my $result = GetOptions (
 	"a|all" => \$config{'allformats'},
 	"c|csv" => \$config{'csv'},
+	"m|html" => \$config{'html'},
 	"l|last" => \$config{'lastmonth'},
-	"t|text" => \$config{'text'},
+	"t|txt" => \$config{'txt'},
 	"u|user=s" => \$config{'username'},
 	"p|password=s" => \$config{'password'},
 	"s|verifyssl!" => \$config{'verifyssl'},
@@ -41,6 +42,15 @@ my $result = GetOptions (
 	"h|help" => \&help
 );
 
+if ($config{'allformats'}) {
+	$config{'csv'}=1;
+	$config{'html'}=1;
+	$config{'txt'}=1;
+} else {
+	unless ($config{csv} or $config{html} or $config{txt}) {
+		$config{txt}=1;
+	}
+}
 
 my $agent = WWW::Mechanize->new(
 	stack_depth => 0,
@@ -57,7 +67,9 @@ if ($config{'verbose'}>10) {
 
 $agent->get($config{'baseurl'});
 
-# $agent->dump_forms;
+if ($config{'debug'}) {
+	$agent->dump_forms;
+}
 
 $agent->submit_form(
         form_name => 'loginform',
@@ -65,23 +77,42 @@ $agent->submit_form(
         button    => 'Submit'
     );
 
-my $request=$config{'baseurl'}.$config{'uri'};
-$request=$request.'textdump=true&' if ($config{'text'} or $config{'csv'});
-$request=$request.'lastmonth=true&' if ($config{'lastmonth'});
+my $request;
+my $burl=$config{'baseurl'}.$config{'uri'};
+$burl=$burl.'lastmonth=true&' if ($config{'lastmonth'});
+my %output;
 
-$agent->get($request);
-
-my $resp = $agent->response()->content();
-if ($config{'csv'}) {
-	$resp =~ s/\t/;/g;
+if (($config{'txt'}) or ($config{'csv'})) {
+	$request=$burl.'textdump=true&';
+	$agent->get($request);
+	my $resp = $agent->response()->content();
+	if ($config{'txt'}) {
+		$output{'txt'} = $resp;
+	}
+	if ($config{'csv'}) {
+		$output{'csv'} = $resp;
+		$output{'csv'} =~ s/\t/;/g;
+	}
 }
 
-if ($config{'$out'}) {
-	open(OUT,">$config{'out'}") or die ("cannot open $config{'out'} for writting: $!");
-	print OUT $resp;	
-	close(OUT);
-} else {
-	print $resp;
+if ($config{'html'}) {
+	$request=$burl;
+	$agent->get($request);
+	$output{'html'} = $agent->response()->content();
+}
+
+foreach my $type ( keys %output )
+{
+	print STDERR "[v] Output $type\n" if ($config{'verbose'}>2);
+	if ($config{'out'}) {
+		my $fn=$config{'out'}.'.'.$type;
+		print STDERR "[v] Output $type to file: $fn\n" if ($config{'verbose'}>2);
+		open(OUT,">$fn") or die ("cannot open $fn for writting: $!");
+		print OUT $output{$type};	
+		close(OUT);
+	} else {
+		print $output{$type};
+	}
 }
 
 sub help {
@@ -93,8 +124,9 @@ sub help {
 	print " -l	display for last month\n";
 	print " -s	verify SSL cert\n";
 	print " -c 	CVS output\n";
+	print " -m	HTML output\n";
 	print " -t	textdump output\n";
-#	print " -a	all outputs\n";
+	print " -a	all outputs\n";
 	print " -o <f>	output to file <f>\n";
 	print " -v	verbose (-vv will be more verbose)\n";
 	print "\n";
